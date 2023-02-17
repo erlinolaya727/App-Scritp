@@ -36,26 +36,27 @@ function rezagosUpdate() {
 		}
 
 
-		const seccionRezagosDia = [];
-		const seccionRezagosActualizar = [];
-		const agregarFilaSheetRezagos2022 = [];
-		const valoresAgregar = [];
-		const filasEliminar = [];
-		const references = csvData.map(row => row[Params.UPDATE_REZAGOS.COLUMNA_REFERENCIA_REZAGO]);
+		let seccionRezagosDia = [];
+		let seccionRezagosActualizar = [];
+		let agregarFilaSheetRezagos2022 = [];
+		let valoresAgregar = [];
+		let filasEliminar = [];
+		//const references = csvData.map(row => row[Params.UPDATE_REZAGOS.COLUMNA_REFERENCIA_REZAGO]);
+		const references = [];
 
 		Logger.log("Inicia loop para array de la data del archivo CSV");
-		for (const x = 0; x <= csvData.length - 1; x++) {
+		for (let x = 0; x <= csvData.length - 1; x++) {
 			const referenciaRezagos = csvData[x][Params.UPDATE_REZAGOS.COLUMNA_REFERENCIA_REZAGO];
 			const valorRezagos = csvData[x][Params.UPDATE_REZAGOS.COLUMNA_VALOR_REZAGO];
 
 			Logger.log("Inicia loop para array de la data del Sheet Rezagos del día");
-			for (const y = 0; y <= sheetValuesRezagos.length - 1; y++) {
+			for (let y = 0; y <= sheetValuesRezagos.length - 1; y++) {
 				const referenciaSheet = sheetValuesRezagos[y][3];
 				const valorSheet = sheetValuesRezagos[y][8];
 
 				if (referenciaRezagos == referenciaSheet) {
-					//let x  = references.indexOf(referenciaRezagos);
-					references.splice(x, 1);
+					Logger.log(referenciaRezagos +"=" +referenciaSheet);
+					Logger.log(valorRezagos +"=" +valorSheet);
 					if (valorRezagos == valorSheet) {
 						Logger.log("Se encontró coindidencia de referencias y de valor");
 						seccionRezagosDia = sheetValuesRezagos[y].slice(0, 10);
@@ -63,16 +64,26 @@ function rezagosUpdate() {
 						valoresAgregar = seccionRezagosDia.concat(seccionRezagosActualizar);
 						agregarFilaSheetRezagos2022.push(valoresAgregar);
 						filasEliminar.push(referenciaSheet);
-
+					} else {
+						references.push(referenciaRezagos);
 					}
+				} else {
+					references.push(referenciaRezagos);
 				}
-
 			}
 		}
 
-		for (const w = 0; references.length; w++) {
-			novelty(references[w])
+		let sinDuplicados = Array.from(new Set([...references]))
+
+		Logger.log("Se encontraron: " + sinDuplicados.length + " referencia(s) que no están en la Sheet");
+
+		if (sinDuplicados.length > 0) {
+			for (let w = 0; w < sinDuplicados.length; w++) {
+				Logger.log("Se encontraron las referencias n\ :" + sinDuplicados[w] + " Enviando correo(s)");
+				novelty(sinDuplicados[w])
+			}
 		}
+
 
 		//Llamar función para elimiar filas de la hoja de reazagos del día 2022
 		Logger.log("Se valida si existen referencias para eliminar por filas");
@@ -99,10 +110,10 @@ function rezagosUpdate() {
 	}
 }
 
-	/**
-	* Mueve los archivos insumo generados en anteriores ejecuciones
-	* a la carpeta de backup
-	*/
+/**
+* Mueve los archivos insumo generados en anteriores ejecuciones
+* a la carpeta de backup
+*/
 const backupLastUpdate = () => {
 	// Se obtiene carpeta de insumos
 	const folder = DriveApp.getFolderById(Params.UPDATE_REZAGOS.CSV_FOLDER_REZAGOS);
