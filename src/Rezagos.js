@@ -36,54 +36,98 @@ function rezagosUpdate() {
 		}
 
 
-		var seccionRezagosDia = [];
-		var seccionRezagosActualizar = [];
-		var agregarFilaSheetRezagos2022 = [];
-		var valoresAgregar = [];
-		var filasEliminar = [];
-
+		const seccionRezagosDia = [];
+		const seccionRezagosActualizar = [];
+		const agregarFilaSheetRezagos2022 = [];
+		const valoresAgregar = [];
+		const filasEliminar = [];
+		const references = csvData.map(row => row[Params.UPDATE_REZAGOS.COLUMNA_REFERENCIA_REZAGO]);
 
 		Logger.log("Inicia loop para array de la data del archivo CSV");
-		for (var x = 0; x <= csvData.length - 1; x++) {
-			var referenciaRezagos = csvData[x][Params.UPDATE_REZAGOS.COLUMNA_REFERENCIA_REZAGO];
-			var valorRezagos = csvData[x][Params.UPDATE_REZAGOS.COLUMNA_VALOR_REZAGO];
+		for (const x = 0; x <= csvData.length - 1; x++) {
+			const referenciaRezagos = csvData[x][Params.UPDATE_REZAGOS.COLUMNA_REFERENCIA_REZAGO];
+			const valorRezagos = csvData[x][Params.UPDATE_REZAGOS.COLUMNA_VALOR_REZAGO];
 
 			Logger.log("Inicia loop para array de la data del Sheet Rezagos del día");
-			for (var y = 0; y <= sheetValuesRezagos.length - 1; y++) {
-				var referenciaSheet = sheetValuesRezagos[y][3];
-				var valorSheet = sheetValuesRezagos[y][8];
+			for (const y = 0; y <= sheetValuesRezagos.length - 1; y++) {
+				const referenciaSheet = sheetValuesRezagos[y][3];
+				const valorSheet = sheetValuesRezagos[y][8];
 
-				if (referenciaRezagos == referenciaSheet && valorRezagos == valorSheet) {
-					Logger.log("Se encontró coindidencia de referencias y de valor");
-					seccionRezagosDia = sheetValuesRezagos[y].slice(0, 10);
-					seccionRezagosActualizar = csvData[x].slice(30, 38);
-					valoresAgregar = seccionRezagosDia.concat(seccionRezagosActualizar);
-					agregarFilaSheetRezagos2022.push(valoresAgregar);
-					filasEliminar.push(referenciaSheet);
+				if (referenciaRezagos == referenciaSheet) {
+					//let x  = references.indexOf(referenciaRezagos);
+					references.splice(x, 1);
+					if (valorRezagos == valorSheet) {
+						Logger.log("Se encontró coindidencia de referencias y de valor");
+						seccionRezagosDia = sheetValuesRezagos[y].slice(0, 10);
+						seccionRezagosActualizar = csvData[x].slice(2, 10);
+						valoresAgregar = seccionRezagosDia.concat(seccionRezagosActualizar);
+						agregarFilaSheetRezagos2022.push(valoresAgregar);
+						filasEliminar.push(referenciaSheet);
+
+					}
 				}
+
 			}
 		}
-		
+
+		for (const w = 0; references.length; w++) {
+			novelty(references[w])
+		}
+
 		//Llamar función para elimiar filas de la hoja de reazagos del día 2022
 		Logger.log("Se valida si existen referencias para eliminar por filas");
 		if (filasEliminar.length > 0) {
-			response=eliminarFilasReferenciasSheet(filasEliminar);
-			var resultado= response.body.eliminado;			
-			if(resultado){
+			response = eliminarFilasReferenciasSheet(filasEliminar);
+			var resultado = response.body.eliminado;
+			if (resultado) {
 				Logger.log("Se inicia la función para llenar filas al final de la tabla Sheet rezagos dell día");
 				insertarFilasInformacion(agregarFilaSheetRezagos2022);
 			}
 		}
 
+		backupLastUpdate();
+
+
 		body.message = 'Información obtenida exitosamente';
 		return buildResponse(ResponseStatus.Successful, body)
 
 	} catch (error) {
-		body.message = 'Error en la funcion principal de rezagos' + `${error.stack}`;
-		Logger.log(`ERROR - ${body.message}`);
+		body.message = 'Error en la funcion principal de rezagos' + `${error.stack} `;
+		Logger.log(`ERROR - ${body.message} `);
+		criticalCheckPoint(body.message);
 		return buildResponse(ResponseStatus.Unsuccessful, body);
 	}
 }
+
+	/**
+	* Mueve los archivos insumo generados en anteriores ejecuciones
+	* a la carpeta de backup
+	*/
+const backupLastUpdate = () => {
+	// Se obtiene carpeta de insumos
+	const folder = DriveApp.getFolderById(Params.UPDATE_REZAGOS.CSV_FOLDER_REZAGOS);
+	// Se obtiene carpeta de respaldo de insumos
+	const backupFolder = DriveApp.getFolderById(
+		Params.UPDATE_REZAGOS.BACKUP_CSV_FOLDER
+	);
+
+	Logger.log("INFO - Buscando archivos a mover dentro de la carpeta de salida");
+
+	// Se busca archivos de insumo
+	const csvsFilter = `title contains '${Params.UPDATE_REZAGOS.CSV_NAME}' `;
+	const inputDbFiles = folder.searchFiles(csvsFilter);
+
+	// Move all output files to backup folder
+	while (inputDbFiles.hasNext()) {
+		const outputFile = inputDbFiles.next();
+		outputFile.moveTo(backupFolder);
+
+		Logger.log(
+			`INFO - Archivo ${outputFile.getName()} movido a la carpeta de backup`
+		);
+	}
+};
+
 
 //Obtiene el archivo de rezagos csv
 const searchRezagoCSV = () => {
@@ -116,12 +160,12 @@ const searchRezagoCSV = () => {
 		body.csvFile = file;
 		body.csvData = csvData;
 
-		Logger.log(`INFO - ${body.message}`);
+		Logger.log(`INFO - ${body.message} `);
 		return buildResponse(ResponseStatus.Successful, body)
 	}
 	// La carpeta no tiene archivos
 	body.message = 'No se encontraron archivos de rezagos para procesar';
-	Logger.log(`INFO - ${body.message}`);
+	Logger.log(`INFO - ${body.message} `);
 	return buildResponse(ResponseStatus.Successful, body);
 }
 
@@ -136,7 +180,7 @@ const getSheetRezagos = () => {
 	try {
 		// Se obtiene archivo e información de la Sheet de google
 		Logger.log("Inicia función getSheetRezagos() para obtener data del Sheet");
-		
+
 		var libro = SpreadsheetApp.openById(Params.UPDATE_REZAGOS.ID_SHEET_REZAGOS);
 		var hoja = libro.getSheetByName(Params.UPDATE_REZAGOS.NAME_SHEET);
 		var lastColumn = hoja.getLastColumn();
@@ -150,7 +194,7 @@ const getSheetRezagos = () => {
 
 	} catch (error) {
 		body.message = 'Se genero un error en la busqueda de la sheet de rezagos del día';
-		Logger.log(`Error - ${body.message}. Description: ${error.stack}`);
+		Logger.log(`Error - ${body.message}.Description: ${error.stack} `);
 		return buildResponse(ResponseStatus.Unsuccessful, body);
 	}
 }
@@ -178,12 +222,12 @@ const eliminarFilasReferenciasSheet = (filasEliminar) => {
 			}
 		}
 		body.message = 'Filas Eliminadas con éxito';
-		body.eliminado=true;
+		body.eliminado = true;
 
 		return buildResponse(ResponseStatus.Successful, body);
-	} catch (error) {		
+	} catch (error) {
 		body.message = 'Se genero un error al momento de eliminar las filas de la hoja de rezagos';
-		Logger.log(`Error - ${body.message}. Description: ${error.stack}`);
+		Logger.log(`Error - ${body.message}.Description: ${error.stack} `);
 		return buildResponse(ResponseStatus.Unsuccessful, body);
 	}
 }
@@ -198,18 +242,18 @@ const insertarFilasInformacion = (newRows) => {
 		Logger.log("Inicia función insertarFilasInformacion() agregar las nuevas filas del archivo rezago");
 		var libro = SpreadsheetApp.openById(Params.UPDATE_REZAGOS.ID_SHEET_REZAGOS);
 		var hoja = libro.getSheetByName(Params.UPDATE_REZAGOS.NAME_SHEET);
-		var rows=newRows.length;
-		var columns= newRows[0].length;
-		var lastRowSheet= hoja.getLastRow();
+		var rows = newRows.length;
+		var columns = newRows[0].length;
+		var lastRowSheet = hoja.getLastRow();
 		hoja.insertRowsAfter(lastRowSheet, rows);
-		var rangeNewRows = hoja.getRange(lastRowSheet+1,1,rows,columns);
+		var rangeNewRows = hoja.getRange(lastRowSheet + 1, 1, rows, columns);
 		rangeNewRows.setValues(newRows);
 
 		body.message = 'Filas Agregadas con éxito';
 		return buildResponse(ResponseStatus.Successful, body);
 	} catch (error) {
 		body.message = 'Se genero un error al momento de agregar neuvas las filas de la hoja de rezagos';
-		Logger.log(`Error - ${body.message}. Description: ${error.stack}`);
+		Logger.log(`Error - ${body.message}.Description: ${error.stack} `);
 		return buildResponse(ResponseStatus.Unsuccessful, body);
 	}
 }
